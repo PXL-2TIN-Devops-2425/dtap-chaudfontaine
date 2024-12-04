@@ -37,6 +37,7 @@ pipeline {
                 sh 'docker push robinbpxl/devops-dtap'
             }
         }
+        
         stage('deployment') {
             steps {
                 script {
