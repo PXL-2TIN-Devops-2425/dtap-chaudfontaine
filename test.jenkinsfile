@@ -1,16 +1,52 @@
 pipeline {
     agent any
-  
+    
+    tools {
+        nodejs 'testenvnode'
+    }
+
     stages {
-        stage ('cleanup'){
-            steps{
-                // TODO
+        stage('cleanup') {
+            steps {
+                cleanWs()
             }
         }
         stage('fetch app code') {
             steps {
                 // Get some code from a GitHub repository
                 git branch: 'main', url: 'https://github.com/PXL-2TIN-DevOps-Resources/calculator-app-finished.git'
+            }
+        }
+        stage('Install dependencies') {
+            steps {
+                echo 'Installing dependencies...'
+                sh 'npm install'
+            }
+        }
+        stage('Build artifact') {
+            steps {
+                echo 'Building Docker container...'
+                sh 'docker build -t dtap-docker:latest .'
+            }
+        }
+        stage('Push artifact') {
+            steps {
+                echo 'Pushing container to Dockerhub...'
+                sh 'docker login -u robinbpxl -p dckr_pat_XGbh5FFC-Qq9KFvDrGc95ZD_694'
+                sh 'docker tag dtap-docker robinbpxl/devops-dtap'
+                sh 'docker push robinbpxl/devops-dtap'
+            }
+        }
+        stage('deployment') {
+            steps {
+                script {
+                    echo 'Removing container on port 3000, in case it exists...'
+                    sh 'docker rm -f $(docker ps --filter "publish=3000" -q) || true'
+                    
+                    echo 'Deploying container on port 3000...'
+                    sh 'docker pull robinbpxl/devops-dtap:latest'
+                    sh 'docker run -d -p 3000:3000 --name dtap-container robinbpxl/devops-dtap:latest'
+                }
             }
         }
     }
