@@ -1,5 +1,9 @@
 pipeline {
     agent any
+    
+    environment {
+        PUBLIC_IP = '52.55.6.33'
+    }
 
     stages {
         stage('cleanup') {
@@ -9,19 +13,28 @@ pipeline {
         }
         stage('deploy prod') {
             steps {
-                echo 'Connecting to remote server...'
                 sshagent(['jenkins-ssh']) {
+                    sh '''
+                    ssh -o StrictHostKeyChecking=no ubuntu@${PUBLIC_IP} << EOF
                     echo 'Pulling latest files from Dockerhub...'
-                    sh 'docker pull robinbpxl/devops-dtap:latest'
-                }                
+                    docker login -u robinbpxl -p dckr_pat_XGbh5FFC-Qq9KFvDrGc95ZD_694
+                    docker pull robinbpxl/devops-dtap:latest
+                    << EOF
+                    '''
+                }
             }
         }
         stage('start prod') {
             steps {
-                echo 'Starting container on remote server...'
                 sshagent(['jenkins-ssh']) {
-                    sh 'docker rm -f $(docker ps --filter "publish=80" -q) || true'
-                    sh 'docker run -d -p 80:80 --name docker-container2 robinbpxl/devops-dtap'
+                    sh '''
+                    ssh -o StrictHostKeyChecking=no ubuntu@${PUBLIC_IP} << EOF
+                    echo 'Removing pre-existing container(s)...'
+                    docker rm -f $(docker ps --filter "publish=80" -q) || docker rm -f docker-container || true
+                    echo 'Starting container on remote server...'
+                    docker run -d -p 80:3000 --name docker-container robinbpxl/devops-dtap
+                    << EOF
+                    '''
                 }
             }
         }
@@ -29,10 +42,18 @@ pipeline {
             steps {
                 echo 'Testing application using curl...'
                 sshagent(['jenkins-ssh']) { 
-                    sh 'curl -I http://localhost'
+                    sh'''
+                        STATUS=$(ssh -o StrictHostKeyChecking=no ubuntu@${PUBLIC_IP} \
+                        "curl -si http://${PUBLIC_IP} | grep -o 200")
+                        if [ "$STATUS" = "200" ]; then
+                            echo "===== STATUS CODE IS 200! ====="
+                        else
+                            echo "===== <!> BAD STATUS CODE <!> ====="
+                            exit 1
+                        fi
+                    '''
                 }
             }
         }
-
     }
 }
