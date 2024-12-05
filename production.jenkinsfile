@@ -1,10 +1,38 @@
 pipeline {
     agent any
+
     stages {
-        stage('dtap production') {
+        stage('cleanup') {
             steps {
-                echo "good luck..."
+                cleanWs()
             }
         }
+        stage('deploy prod') {
+            steps {
+                echo 'Connecting to remote server...'
+                sshagent(['jenkins-ssh']) {
+                    echo 'Pulling latest files from Dockerhub...'
+                    sh 'docker pull robinbpxl/devops-dtap:latest'
+                }                
+            }
+        }
+        stage('start prod') {
+            steps {
+                echo 'Starting container on remote server...'
+                sshagent(['jenkins-ssh']) {
+                    sh 'docker rm -f $(docker ps --filter "publish=80" -q) || true'
+                    sh 'docker run -d -p 80:80 --name docker-container2 robinbpxl/devops-dtap'
+                }
+            }
+        }
+        stage('test prod') {
+            steps {
+                echo 'Testing application using curl...'
+                sshagent(['jenkins-ssh']) { 
+                    sh 'curl -I http://localhost'
+                }
+            }
+        }
+
     }
 }
